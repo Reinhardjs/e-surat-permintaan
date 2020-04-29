@@ -1,22 +1,21 @@
 package com.example.e_suratpermintaan.presentation.activity
 
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.os.Bundle
 import android.os.Parcelable
 import android.view.View
 import android.widget.ArrayAdapter
-import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.e_suratpermintaan.core.domain.entities.requests.CreateSP
 import com.e_suratpermintaan.core.domain.entities.responses.*
 import com.example.e_suratpermintaan.R
 import com.example.e_suratpermintaan.framework.sharedpreference.ProfilePreference
-import com.example.e_suratpermintaan.presentation.adapter.SuratPermintaanAdapter
+import com.example.e_suratpermintaan.presentation.activity.DetailSuratPermintaanActivity.Companion.ID_SP_EXTRA_KEY
 import com.example.e_suratpermintaan.presentation.base.BaseActivity
+import com.example.e_suratpermintaan.presentation.base.BaseAdapter
+import com.example.e_suratpermintaan.presentation.viewholders.usingbaseadapter.MyDataViewHolder
 import com.example.e_suratpermintaan.presentation.viewmodel.MasterViewModel
+import com.example.e_suratpermintaan.presentation.viewmodel.NotifikasiViewModel
 import com.example.e_suratpermintaan.presentation.viewmodel.SuratPermintaanViewModel
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.android.synthetic.main.activity_main.*
@@ -24,11 +23,11 @@ import kotlinx.android.synthetic.main.dialog_ajukan_sp.view.*
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
-
 class MainActivity : BaseActivity() {
 
     private val suratPermintaanViewModel: SuratPermintaanViewModel by viewModel()
     private val masterViewModel: MasterViewModel by viewModel()
+    private val notifikasiViewModel: NotifikasiViewModel by viewModel()
     private val profilePreference: ProfilePreference by inject()
 
     private lateinit var idUser: String
@@ -39,21 +38,11 @@ class MainActivity : BaseActivity() {
     private lateinit var jenisList: ArrayList<DataMasterJenis>
 
     private var spListState: Parcelable? = null
-    private lateinit var suratPermintaanAdapter: SuratPermintaanAdapter
+    private lateinit var spAdapter: BaseAdapter<MyDataViewHolder>
 
     private var isInitialized = false
 
     override fun layoutId(): Int = R.layout.activity_main
-
-    private val fcmOnMessageReceivedReceiver: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent) {
-            val bodyValue = intent.getStringExtra("body_value")
-
-            if (bodyValue != null) {
-                Toast.makeText(this@MainActivity, bodyValue, Toast.LENGTH_LONG).show()
-            }
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,54 +52,55 @@ class MainActivity : BaseActivity() {
 
             init()
         }
-
-        val filter = IntentFilter(getString(R.string.firebase_onmessagereceived_intentfilter))
-        this.registerReceiver(fcmOnMessageReceivedReceiver, filter)
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-
-        this.unregisterReceiver(fcmOnMessageReceivedReceiver)
     }
 
     private fun init() {
         proyekList = arrayListOf()
         jenisList = arrayListOf()
 
-        suratPermintaanAdapter = SuratPermintaanAdapter()
+        spAdapter = BaseAdapter(
+            R.layout.item_surat_permintaan_row, MyDataViewHolder::class.java
+        )
+
         setupListeners()
         initRecyclerView()
 
         val profileId = profilePreference.getProfile()?.id
+        val roleId = profilePreference.getProfile()?.roleId
+
         if (profileId != null) {
             idUser = profileId
 
             val spObservable = suratPermintaanViewModel.readMyData(profileId)
             val proyekObservable = masterViewModel.getProyekList(profileId)
             val jenisObservable = masterViewModel.getJenisList(profileId)
+            val notifObservable = notifikasiViewModel.getNotifikasiList(profileId)
 
             disposable = spObservable.subscribe(this::handleResponse, this::handleError)
             disposable = proyekObservable.subscribe(this::handleResponse, this::handleError)
             disposable = jenisObservable.subscribe(this::handleResponse, this::handleError)
+            disposable = notifObservable.subscribe(this::handleResponse, this::handleError)
+        }
+
+        if (!roleId.equals("1")) {
+            btnAjukan.visibility = View.GONE
         }
     }
 
     private fun initRecyclerView() {
-        tv_show_length_entry.text = "Menampilkan ${suratPermintaanAdapter.spList.size} entri"
+        tv_show_length_entry.text = getString(
+            R.string.main_header_list_count_msg,
+            spAdapter.itemList.size.toString()
+        )
 
         recyclerView.layoutManager = LinearLayoutManager(this)
-        recyclerView.adapter = suratPermintaanAdapter
-
-        (recyclerView.layoutManager as LinearLayoutManager).isAutoMeasureEnabled = true
-        recyclerView.setHasFixedSize(false)
+        recyclerView.adapter = spAdapter
 
         if (spListState != null)
             recyclerView.layoutManager?.onRestoreInstanceState(spListState)
     }
 
     private fun setupListeners() {
-
         btnProfile.setOnClickListener {
             startActivity(Intent(this@MainActivity, ProfileActivity::class.java))
         }
@@ -119,18 +109,16 @@ class MainActivity : BaseActivity() {
             startShowDialog()
         }
 
-        btnSeeNotifikasi.setOnClickListener {
+        frameNotifikasi.setOnClickListener {
             startActivity(Intent(this@MainActivity, NotifikasiActivity::class.java))
         }
 
-        suratPermintaanAdapter.setOnClickListener(object :
-            SuratPermintaanAdapter.OnClickItemListener {
-            override fun onClick(view: View, item: SuratPermintaan?) {
-                val intent = Intent(this@MainActivity, DetailSuratPermintaanActivity::class.java)
-                intent.putExtra("id_sp", (item as DataMyData).id)
-                startActivity(intent)
-            }
-        })
+        spAdapter.setOnItemClickListener { item, _ ->
+            val data = item as DataMyData
+            val intent = Intent(this@MainActivity, DetailSuratPermintaanActivity::class.java)
+            intent.putExtra(ID_SP_EXTRA_KEY, data.id.toString())
+            startActivity(intent)
+        }
     }
 
     private fun handleResponse(response: Any) {
@@ -140,12 +128,14 @@ class MainActivity : BaseActivity() {
                 val suratPermintaanList: List<DataMyData?>? = response.data
 
                 suratPermintaanList?.forEach {
-                    suratPermintaanAdapter.spList.add(it)
+                    spAdapter.itemList.add(it as DataMyData)
                 }
 
-                tv_show_length_entry.text =
-                    "Menampilkan ${suratPermintaanAdapter.spList.size} entri"
-                suratPermintaanAdapter.notifyDataSetChanged()
+                tv_show_length_entry.text = getString(
+                    R.string.main_header_list_count_msg,
+                    spAdapter.itemList.size.toString()
+                )
+                spAdapter.notifyDataSetChanged()
 
             }
             is MasterProyekResponse -> {
@@ -170,11 +160,17 @@ class MainActivity : BaseActivity() {
                 toastNotify(response.message)
 
             }
-        }
-    }
+            is NotifikasiResponse -> {
+                val notif = response.data?.get(0)
 
-    private fun handleError(error: Throwable) {
-        Toast.makeText(this, error.message.toString(), Toast.LENGTH_LONG).show()
+                if (notif?.countUnread == 0) {
+                    tvCountUnreadNotif.visibility = View.GONE
+                } else {
+                    tvCountUnreadNotif.visibility = View.VISIBLE
+                    tvCountUnreadNotif.text = notif?.countUnread.toString()
+                }
+            }
+        }
     }
 
     private fun startShowDialog() {

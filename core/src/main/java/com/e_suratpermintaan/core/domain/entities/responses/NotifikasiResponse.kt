@@ -31,6 +31,12 @@ data class ReadItem(
 	@field:SerializedName("keterangan")
 	val keterangan: String? = null,
 
+	@field:SerializedName("kode_sp")
+	val kode_sp: String? = null,
+
+	@field:SerializedName("nama_proyek")
+	val nama_proyek: String? = null,
+
 	@field:SerializedName("role")
 	val role: String? = null,
 
@@ -44,7 +50,13 @@ data class ReadItem(
 	val tanggal: String? = null,
 
 	@field:SerializedName("user")
-	val user: String? = null
+	val user: String? = null,
+
+	@field:SerializedName("id_sp")
+	val id_sp: String? = null,
+
+	@field:SerializedName("warna")
+	val warna: String? = null
 )
 
 data class UnreadItem(
@@ -52,6 +64,12 @@ data class UnreadItem(
 	@field:SerializedName("keterangan")
 	val keterangan: String? = null,
 
+	@field:SerializedName("kode_sp")
+	val kode_sp: String? = null,
+
+	@field:SerializedName("nama_proyek")
+	val nama_proyek: String? = null,
+
 	@field:SerializedName("role")
 	val role: String? = null,
 
@@ -65,5 +83,11 @@ data class UnreadItem(
 	val tanggal: String? = null,
 
 	@field:SerializedName("user")
-	val user: String? = null
+	val user: String? = null,
+
+	@field:SerializedName("id_sp")
+	val id_sp: String? = null,
+
+	@field:SerializedName("warna")
+	val warna: String? = null
 )
